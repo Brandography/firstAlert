@@ -231,6 +231,6 @@ cron.schedule("0 1 * * 1", () => {
 });
 
 // --- Run immediately if called directly ---
-if (require.main === module) {
+/*if (require.main === module) {
   runExportJob();
-}
+}*/
