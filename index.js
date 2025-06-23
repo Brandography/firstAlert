@@ -75,12 +75,14 @@ const fieldMappings = {
 // --- Fetch orders ---
 async function fetchShopifyOrders() {
   let allOrders = [];
-  let baseUrl = `https://${SHOPIFY_STORE}/admin/api/2024-01/orders.json?status=any&limit=250`;
+  let baseUrl = `https://${SHOPIFY_STORE}/admin/api/2024-04/orders.json`;
   let pageInfo = null;
 
   try {
+    // Initial request (with filters)
+    let url = `${baseUrl}?status=any&limit=250`;
+
     do {
-      const url = pageInfo ? `${baseUrl}&page_info=${pageInfo}` : baseUrl;
       const response = await axios.get(url, {
         headers: {
           "X-Shopify-Access-Token": SHOPIFY_ACCESS_TOKEN,
@@ -92,17 +94,23 @@ async function fetchShopifyOrders() {
       allOrders.push(...orders);
 
       const linkHeader = response.headers['link'];
+
       if (linkHeader && linkHeader.includes('rel="next"')) {
-        const match = linkHeader.match(/page_info=([^&>]+)/);
-        pageInfo = match ? match[1] : null;
+        const match = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
+        if (match && match[1]) {
+          url = match[1]; // Set next page URL directly
+        } else {
+          url = null;
+        }
       } else {
-        pageInfo = null;
+        url = null;
       }
-    } while (pageInfo);
+    } while (url);
 
     return allOrders;
   } catch (error) {
     console.error("❌ Error fetching Shopify orders:", error.message);
+    console.log(error.response?.data);
     logMessage("❌ Error fetching Shopify orders: " + error.message);
     return [];
   }
@@ -226,8 +234,18 @@ async function runExportJob() {
 }
 
 // --- Scheduler: Every Monday at 1 AM ---
-cron.schedule("0 1 * * 1", () => {
+/*
+0 — Minute (0th minute)
+1 — Hour (1 AM)
+* — Every day of the month
+* — Every month
+1 — Monday (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
+*/
+
+cron.schedule('0 0 * * 1', () => {
   runExportJob();
+}, {
+  timezone: 'America/Chicago' 
 });
 
 // --- Run immediately if called directly ---
