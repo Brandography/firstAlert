@@ -6,13 +6,12 @@ COPY package*.json ./
 RUN npm ci
 
 # 2) Build-time args
-ARG SHOPIFY_STORE=qa.shopify.firstalert.com
-ARG SHOPIFY_ACCESS_TOKEN
-ARG SFTP_HOST
+ARG SHOPIFY_STORE=first-alert.myshopify.com
+ARG SFTP_HOST=sftp.igxfer.com
 ARG SFTP_PORT=22
-ARG SFTP_USER
-ARG SFTP_PASSWORD
+ARG SFTP_USER=BRNDGR1I1
 ARG SFTP_REMOTE_PATH=/orders.csv
+
 
 # 3) Expose to runtime
 ENV SHOPIFY_STORE=${SHOPIFY_STORE} \
