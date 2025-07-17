@@ -30,4 +30,5 @@ COPY . .
 # CMD ["npm", "start"]
 
 # 5b) If this is a batch job instead:
+EXPOSE 8080
 CMD ["node", "index.js"]
