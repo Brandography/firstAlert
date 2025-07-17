@@ -233,22 +233,17 @@ async function runExportJob() {
   }
 }
 
-// --- Scheduler: Every Monday at 1 AM ---
-/*
-0 — Minute (0th minute)
-1 — Hour (1 AM)
-* — Every day of the month
-* — Every month
-1 — Monday (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
-*/
-
-cron.schedule('0 0 * * 1', () => {
-  runExportJob();
-}, {
-  timezone: 'America/Chicago' 
-});
-
 // --- Run immediately if called directly ---
 /*if (require.main === module) {
   runExportJob();
 }*/
+
+// --- Start dummy HTTP server for Cloud Run ---
+const PORT = process.env.PORT || 8080;
+
+http.createServer((req, res) => {
+  res.writeHead(200);
+  res.end("✅ Service is running\n");
+}).listen(PORT, () => {
+  console.log(`🌐 HTTP server listening on port ${PORT}`);
+});
