@@ -238,12 +238,16 @@ async function runExportJob() {
   runExportJob();
 }*/
 
-// --- Start dummy HTTP server for Cloud Run ---
-const PORT = process.env.PORT || 8080;
-
-http.createServer((req, res) => {
-  res.writeHead(200);
-  res.end("✅ Service is running\n");
+http.createServer(async (req, res) => {
+  if (req.url === "/run" && req.method === "POST") {
+    console.log("📅 Cron job triggered export job.");
+    await runExportJob();
+    res.writeHead(200);
+    res.end("✅ Export job triggered\n");
+  } else {
+    res.writeHead(200);
+    res.end("✅ Service is running\n");
+  }
 }).listen(PORT, () => {
   console.log(`🌐 HTTP server listening on port ${PORT}`);
 });
