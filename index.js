@@ -7,6 +7,7 @@ const http = require("http");
 
 // --- Environment variables ---
 const {
+  PORT,
   SHOPIFY_STORE,
   SHOPIFY_ACCESS_TOKEN,
   SFTP_HOST,

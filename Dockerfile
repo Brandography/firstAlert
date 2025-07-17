@@ -11,6 +11,7 @@ ARG SFTP_HOST=sftp.igxfer.com
 ARG SFTP_PORT=22
 ARG SFTP_USER=BRNDGR1I1
 ARG SFTP_REMOTE_PATH=/orders.csv
+ARG PORT = 8080
 
 
 # 3) Expose to runtime
