@@ -239,6 +239,10 @@ async function runExportJob() {
   runExportJob();
 }*/
 
+const http = require("http");
+
+const portFromEnv = process.env.PORT;
+
 http.createServer(async (req, res) => {
   if (req.url === "/run" && req.method === "POST") {
     console.log("📅 Cron job triggered export job.");
@@ -246,9 +250,9 @@ http.createServer(async (req, res) => {
     res.writeHead(200);
     res.end("✅ Export job triggered\n");
   } else {
-    res.writeHead(200);
+    res.writeHead(200);;
     res.end("✅ Service is running\n");
   }
-}).listen(PORT, () => {
-  console.log(`🌐 HTTP server listening on port ${PORT}`);
+}).listen(portFromEnv, () => {
+  console.log(`🌐 HTTP server listening on dynamic port ${portFromEnv}`);
 });
