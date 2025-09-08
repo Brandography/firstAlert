@@ -5,11 +5,11 @@ const { Parser } = require("json2csv");
 const SftpClient = require("ssh2-sftp-client");
 const cron = require("node-cron");
 
-// --- Environment variables ---
+// --- Load environment variables ---
 const {
   PORT,
-  SHOPIFY_STORE,
-  SHOPIFY_ACCESS_TOKEN,
+  SHOPIFY_STORES,
+  SHOPIFY_ACCESS_TOKENS,
   SFTP_HOST,
   SFTP_PORT,
   SFTP_USER,
@@ -17,12 +17,19 @@ const {
   SFTP_REMOTE_PATH
 } = process.env;
 
+const shopifyStores = SHOPIFY_STORES.split(",");
+const shopifyTokens = SHOPIFY_ACCESS_TOKENS.split(",");
+
+if (shopifyStores.length !== shopifyTokens.length) {
+  throw new Error("Mismatch between number of stores and access tokens.");
+}
+
 // --- Static field mapping ---
 const fieldMappings = {
   "Name": "name",
   "Email": "email",
   "Financial Status": "financial_status",
-  "Paid at": "", // Leave blank
+  "Paid at": "",
   "Fulfillment Status": "fulfillment_status",
   "Fulfilled at": "fulfillments.created_at",
   "Accepts Marketing": "buyer_accepts_marketing",
@@ -38,7 +45,7 @@ const fieldMappings = {
   "Lineitem quantity": "line_items.quantity",
   "Lineitem name": "line_items.name",
   "Lineitem price": "line_items.price",
-  "Lineitem compare at price": "", // Leave blank
+  "Lineitem compare at price": "",
   "Lineitem sku": "line_items.sku",
   "Lineitem requires shipping": "line_items.requires_shipping",
   "Lineitem taxable": "line_items.taxable",
@@ -73,20 +80,18 @@ const fieldMappings = {
   "Shipping Province Name": "shipping_address.province_code"
 };
 
-// --- Fetch orders ---
-async function fetchShopifyOrders() {
+// --- Fetch orders from a given store ---
+async function fetchShopifyOrders(store, token) {
   let allOrders = [];
-  let baseUrl = `https://${SHOPIFY_STORE}/admin/api/2024-04/orders.json`;
-  let pageInfo = null;
+  let baseUrl = `https://${store}/admin/api/2024-04/orders.json`;
 
   try {
-    // Initial request (with filters)
     let url = `${baseUrl}?status=any&limit=250`;
 
     do {
       const response = await axios.get(url, {
         headers: {
-          "X-Shopify-Access-Token": SHOPIFY_ACCESS_TOKEN,
+          "X-Shopify-Access-Token": token,
           "Content-Type": "application/json"
         }
       });
@@ -98,11 +103,7 @@ async function fetchShopifyOrders() {
 
       if (linkHeader && linkHeader.includes('rel="next"')) {
         const match = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
-        if (match && match[1]) {
-          url = match[1]; // Set next page URL directly
-        } else {
-          url = null;
-        }
+        url = match?.[1] || null;
       } else {
         url = null;
       }
@@ -110,9 +111,8 @@ async function fetchShopifyOrders() {
 
     return allOrders;
   } catch (error) {
-    console.error("❌ Error fetching Shopify orders:", error.message);
-    console.log(error.response?.data);
-    logMessage("❌ Error fetching Shopify orders: " + error.message);
+    console.error(`❌ Error fetching orders from ${store}:`, error.message);
+    logMessage(`❌ Error fetching orders from ${store}: ${error.message}`);
     return [];
   }
 }
@@ -136,7 +136,7 @@ function flattenOrders(orders) {
         if (csvField === "Accepts Marketing") {
           value = order.buyer_accepts_marketing ? "TRUE" : "FALSE";
         } else if (csvField === "Created at") {
-          const raw = order.created_at; // e.g., 2025-03-27T11:51:11-04:00
+          const raw = order.created_at;
           const [datePart, timePart] = raw.split("T");
           const [year, month, day] = datePart.split("-");
           const [hour, minute] = timePart.split(":");
@@ -169,7 +169,6 @@ function flattenOrders(orders) {
   return rows;
 }
 
-
 // --- Convert to CSV ---
 function convertToCSV(rows) {
   const fields = Object.keys(fieldMappings);
@@ -177,7 +176,7 @@ function convertToCSV(rows) {
   return parser.parse(rows);
 }
 
-// --- Upload CSV to SFTP ---
+// --- Upload to SFTP ---
 async function uploadToSFTP(csvData) {
   const sftp = new SftpClient();
   const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -212,22 +211,43 @@ function logMessage(message) {
   fs.appendFileSync("shopify_export.log", `[${timestamp}] ${message}\n`);
 }
 
-// --- Run job ---
+// --- Run Export Job ---
 async function runExportJob() {
+  const startTime = Date.now();
+
   try {
     console.log("🚀 Running export job...");
     logMessage("🚀 Starting export job...");
 
-    const orders = await fetchShopifyOrders();
-    if (!orders.length) {
-      console.log("⚠️ No orders found.");
-      logMessage("⚠️ No orders found.");
+    let allOrders = [];
+
+    for (let i = 0; i < shopifyStores.length; i++) {
+      const store = shopifyStores[i];
+      const token = shopifyTokens[i];
+      console.log(`📦 Fetching orders from ${store}...`);
+      const orders = await fetchShopifyOrders(store, token);
+      if (orders.length) {
+        allOrders.push(...orders);
+        logMessage(`✅ Fetched ${orders.length} orders from ${store}`);
+      } else {
+        logMessage(`⚠️ No orders found for ${store}`);
+      }
+    }
+
+    if (!allOrders.length) {
+      console.log("⚠️ No orders found across all stores.");
+      logMessage("⚠️ No orders found across all stores.");
       return;
     }
 
-    const rows = flattenOrders(orders);
+    const rows = flattenOrders(allOrders);
     const csvData = convertToCSV(rows);
     await uploadToSFTP(csvData);
+    const endTime = Date.now();
+    const totalSeconds = ((endTime - startTime) / 1000).toFixed(2);
+    console.log(`✅ Export job completed in ${totalSeconds} seconds.`);
+    logMessage(`✅ Export job completed in ${totalSeconds} seconds.`);
+
   } catch (error) {
     console.error("❌ Job failed:", error.message);
     logMessage("❌ Job failed: " + error.message);
